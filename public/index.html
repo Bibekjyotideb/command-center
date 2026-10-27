@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">◆</span> Command Center</div>
+    <nav id="nav">
+      <a href="#dashboard" data-view="dashboard"><span>▦</span> Dashboard</a>
+      <a href="#projects" data-view="projects"><span>▤</span> Projects</a>
+      <a href="#tasks" data-view="tasks"><span>☑</span> Tasks <em id="taskBadge"></em></a>
+      <a href="#skills" data-view="skills"><span>✦</span> Skills</a>
+      <a href="#ideas" data-view="ideas"><span>✧</span> Ideas</a>
+      <a href="#settings" data-view="settings"><span>⚙</span> Settings</a>
+    </nav>
+    <div class="side-foot" id="sideFoot"></div>
+  </aside>
+  <main id="main"></main>
+</div>
+<div id="modalRoot"></div>
+<div id="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

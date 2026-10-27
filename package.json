@@ -1,0 +1,17 @@
+{
+  "name": "command-center",
+  "version": "1.0.0",
+  "description": "Local dashboard for projects, tasks, Claude Code skills and ideas",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js --open"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "node-notifier": "^10.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
