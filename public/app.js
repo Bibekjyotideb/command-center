@@ -152,6 +152,12 @@ async function projAction(id, kind) {
   if (kind === 'open') return act(() => post(`/api/projects/${id}/open`), 'Opening in VS Code…');
   if (kind === 'folder') return act(() => post(`/api/projects/${id}/folder`));
   if (kind === 'terminal') return act(() => post(`/api/projects/${id}/terminal`), 'Claude terminal opened');
+  if (kind === 'setup') {
+    const r = await act(() => post(`/api/projects/${id}/setup`), 'Setup window opened. It shows what it installs; big downloads take a while.');
+    if (r) setTimeout(async () => { await post(`/api/projects/${id}/setup/recheck`).catch(() => {}); refresh(); }, 60000);
+    return;
+  }
+  if (kind === 'recheck') { toast('Checking…'); await post(`/api/projects/${id}/setup/recheck`).catch(e => toast(e.message, true)); return refresh(); }
   if (kind === 'edit') return openEditProject(id);
   if (kind === 'star') { const p = S.projects.find(x => x.id === id); await act(() => patch('/api/projects/' + id, { active: !p.active })); return refresh(); }
   if (kind === 'block') { await act(() => post(`/api/projects/${id}/status-block`), 'Status block added to CLAUDE.md'); return refresh(); }
@@ -180,6 +186,13 @@ function pollJob(key, onDone) {
   setTimeout(tick, 2000);
 }
 
+function setupChip(p) {
+  const s = p.setup;
+  if (!s || s.checking) return '';
+  if (s.error) return `<span class="chip warn" title="${esc(s.error)}">Setup: can't check</span>`;
+  if (s.ok) return `<span class="chip" title="Every skill, tool and model in skills.json is installed${s.optionalMissing && s.optionalMissing.length ? ' (optional missing: ' + esc(s.optionalMissing.join(', ')) + ')' : ''}">Skills &amp; tools ready</span>`;
+  return `<span class="chip warn" title="Missing: ${esc(s.missing.join(', '))}">Setup: ${s.missing.length} to install</span>`;
+}
 function projectCard(p, compact = false) {
   const c = p.context || {};
   const pct = c.progressPct;
@@ -205,6 +218,7 @@ function projectCard(p, compact = false) {
       ${p.git && p.git.uncommitted ? `<span>${p.git.uncommitted} uncommitted</span>` : ''}
       ${p.github ? `<a href="${esc(p.github.url)}" target="_blank">GitHub${p.github.openIssues ? ` · ${p.github.openIssues} issues` : ''}</a>` : (p.repo ? `<span class="mono">${esc(p.repo)}</span>` : '')}
       ${!p.exists && p.path ? '<span class="chip bad">folder missing</span>' : ''}
+      ${setupChip(p)}
     </div>
     <div class="actions">
       <button class="sm primary" data-p="${p.id}" data-a="open" ${p.exists ? '' : 'disabled'}>Open in VS Code</button>
@@ -212,6 +226,8 @@ function projectCard(p, compact = false) {
       <button class="sm" data-p="${p.id}" data-a="folder" ${p.exists ? '' : 'disabled'}>Folder</button>` : ''}
       ${p.exists ? (c.hasStatusBlock || !compact ? `<button class="sm" data-p="${p.id}" data-a="context" ${busy ? 'disabled' : ''} title="Claude reads the project and updates its status block">${busy ? '<span class="spin"></span> Updating' : '↻ Status'}</button>` : '') : ''}
       ${p.exists && !c.hasStatusBlock ? `<button class="sm" data-p="${p.id}" data-a="block" title="Adds an empty status block to CLAUDE.md">+ Status block</button>` : ''}
+      ${p.exists && p.setup && !p.setup.checking && !p.setup.ok ? `<button class="sm primary" data-p="${p.id}" data-a="setup" title="Installs the skills, tools and models this project lists in skills.json (opens a window)">Install ${p.setup.missing ? p.setup.missing.length : ''} missing</button>` : ''}
+      ${p.exists && p.setup && !compact ? `<button class="sm ghost" data-p="${p.id}" data-a="recheck" title="Check skills.json again">↻ Setup</button>` : ''}
       ${!compact ? `<span class="spacer"></span><button class="sm ghost" data-p="${p.id}" data-a="edit">Edit</button><button class="sm ghost danger" data-p="${p.id}" data-a="delete">Remove</button>` : ''}
     </div>
   </div>`;

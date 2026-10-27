@@ -113,6 +113,40 @@ function readContext(p) {
   return out;
 }
 
+// ---------- project setup (skills.json + tools/bootstrap.py, used by youtube-pipeline and instagram-pipeline) ----------
+// A project that lists its skills, tools and models in skills.json gets a "Setup: N to install" chip and an Install button.
+let PY = null;
+function pythonCmd() {
+  if (PY !== null) return Promise.resolve(PY);
+  const tryOne = (cmd) => new Promise(res => execFile(cmd, ['--version'], { timeout: 5000, windowsHide: true }, err => res(err ? null : cmd)));
+  return (async () => { PY = (await tryOne('python')) || (IS_WIN ? await tryOne('py') : await tryOne('python3')) || ''; return PY; })();
+}
+const setupCache = new Map(); // path -> { at, info }
+function hasSetup(dir) { return !!dir && fs.existsSync(path.join(dir, 'skills.json')) && fs.existsSync(path.join(dir, 'tools', 'bootstrap.py')); }
+async function checkSetup(dir) {
+  const py = await pythonCmd();
+  if (!py) return { hasSetup: true, ok: false, error: 'Python not found' };
+  return new Promise(res => execFile(py, [path.join('tools', 'bootstrap.py'), '--json'], { cwd: dir, timeout: 30000, windowsHide: true },
+    (err, stdout) => {
+      try {
+        const j = JSON.parse(stdout);
+        const missing = j.items.filter(i => !i.ok && !i.optional).map(i => i.name);
+        res({ hasSetup: true, ok: !missing.length, missing, optionalMissing: j.items.filter(i => !i.ok && i.optional).map(i => i.name) });
+      } catch { res({ hasSetup: true, ok: false, error: (err && err.message || 'setup check failed').slice(0, 200) }); }
+    }));
+}
+function setupInfo(dir) {
+  if (!hasSetup(dir)) return null;
+  const c = setupCache.get(dir);
+  if (!c || Date.now() - c.at > 10 * 60 * 1000) {
+    if (!c || !c.pending) {
+      setupCache.set(dir, { ...(c || {}), pending: true, at: c ? c.at : 0 });
+      checkSetup(dir).then(info => setupCache.set(dir, { at: Date.now(), info })).catch(() => setupCache.delete(dir));
+    }
+  }
+  return c && c.info ? c.info : { hasSetup: true, checking: true };
+}
+
 function statusTemplate(phase = 'Planning') {
   return `${STATUS_START}
 ## Status
@@ -340,6 +374,7 @@ function installIntegration() {
 - When you finish a meaningful piece of work in a project (a feature, a fix, a milestone, or the end of a working session), update that block so it reflects reality. Keep the rest of CLAUDE.md as it is. If the block is missing, add it near the top.
 - Progress is an honest estimate toward the project's current goal (MVP or next release), not toward perfection.
 - Installed skills, slash commands and agents exist to be used: whenever a task matches a skill's description, use that skill without waiting to be asked.
+- A project with a \`skills.json\` lists every skill, tool and model it needs; \`python tools/bootstrap.py\` checks them and \`--install\` installs what's missing. If the session-start message says something isn't installed, offer to install it before work that needs it. When we adopt a new skill or tool for such a project, add it to its \`skills.json\` so every PC gets it.
 ${CC_END}`;
   const f = path.join(CLAUDE_DIR, 'CLAUDE.md');
   fs.mkdirSync(CLAUDE_DIR, { recursive: true });
@@ -386,7 +421,7 @@ app.get('/api/projects', wrap(async (req, res) => {
     const lastActivityAt = times.length ? new Date(Math.max(...times)).toISOString() : null;
     const openTasks = db.tasks.filter(t => t.projectId === p.id && !t.completedAt).length;
     const doneTasks = db.tasks.filter(t => t.projectId === p.id && t.completedAt).length;
-    return { ...p, exists, git: g, context: ctx, github: gh, lastActivityAt, openTasks, doneTasks };
+    return { ...p, exists, git: g, context: ctx, github: gh, lastActivityAt, openTasks, doneTasks, setup: exists ? setupInfo(p.path) : null };
   }));
   res.json(list);
 }));
@@ -440,6 +475,24 @@ app.post('/api/projects/:id/terminal', wrap(async (req, res) => {
   if (!IS_WIN) throw new Error('This button is set up for Windows only.');
   spawn('cmd', ['/c', 'start', 'Claude', 'cmd', '/k', 'claude'], { cwd: p.path, detached: true, stdio: 'ignore' }).unref();
   res.json({ ok: true });
+}));
+app.post('/api/projects/:id/setup', wrap(async (req, res) => {
+  const p = findProject(req.params.id);
+  if (!hasSetup(p.path)) throw new Error('This project has no skills.json / tools/bootstrap.py');
+  if (!IS_WIN) throw new Error('This button is set up for Windows only. Run: python tools/bootstrap.py --install');
+  const py = await pythonCmd();
+  if (!py) throw new Error('Python not found. Install Python 3.10+ (tick "Add python.exe to PATH").');
+  // a visible window, so you can see sizes, answer the prompt and watch progress
+  spawn('cmd', ['/c', 'start', 'Project setup', 'cmd', '/k', `${py} tools\\bootstrap.py --install`], { cwd: p.path, detached: true, stdio: 'ignore' }).unref();
+  setupCache.delete(p.path);
+  res.json({ ok: true });
+}));
+app.post('/api/projects/:id/setup/recheck', wrap(async (req, res) => {
+  const p = findProject(req.params.id);
+  if (!hasSetup(p.path)) return res.json(null);
+  const info = await checkSetup(p.path);
+  setupCache.set(p.path, { at: Date.now(), info });
+  res.json(info);
 }));
 app.post('/api/projects/:id/status-block', wrap(async (req, res) => {
   const p = findProject(req.params.id);

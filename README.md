@@ -54,6 +54,8 @@ The dashboard reads that block for each project's progress bar. If a project has
 
 You can also press **↻ Status** on any card: it runs `claude -p` in that folder to re-read the project and rewrite only the status block.
 
+**Project setup (skills and tools a project needs).** A project that has a `skills.json` and `tools/bootstrap.py` (both pipelines do) gets a chip on its card: **Skills & tools ready**, or **Setup: N to install** with an **Install N missing** button. The button opens a terminal that runs `python tools/bootstrap.py --install` in that folder (it lists sizes and asks before installing); **↻ Setup** re-checks. The check is cached for 10 minutes. To add this to another project, copy `tools/bootstrap.py` and write a `skills.json` listing what it needs.
+
 **Skills.** The Skills page lists everything installed: your skills (`~/.claude/skills`), plugin skills, project skills, slash commands and agents, with search. Claude Code already picks skills automatically from their descriptions, so this page is for your reference.
 
 **Tasks.** Quick-add with Today / This week / This month / No date / any date, with or without a project. Reminders: a Windows notification when a task is overdue or untouched for N days (7 by default; change it in Settings). Each task nags at most once a day; **Snooze** quiets it for 3 days. Clicking the notification opens the Tasks page.
